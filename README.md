@@ -1,11 +1,8 @@
 # 🛡️ Enterprise Data Governance, Quality & Analytics Pipeline
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://big-data-spark-pipeline-fpq9fozykr3m6bkpvq8fhz.streamlit.app)
+
 A production-grade, end-to-end Big Data pipeline implementing the **Medallion Architecture (Bronze -> Silver -> Gold)** combined with **Data Quality Governance**, automated quarantine auditing, and an interactive **Streamlit** analytics dashboard.
-
----
-
-## 🌐 Live Demo
-👉 **[Click Here to View the Live Streamlit Cloud Application](https://big-data-spark-pipeline-fpq9fozykr3m6bkpvq8fhz.streamlit.app)**
 
 ---
 
@@ -19,7 +16,7 @@ This project simulates a real-world enterprise data platform designed to ingest 
 [ Bronze Layer ] ──(Data Quality Gates)──► [ Quarantine Layer ] (Failed Records Audit)
 │
 ▼ (Cleaning & Validation)
-[ Silver Layer ]
+[ Silver Layer ] 
 │
 ▼ (Business Aggregations)
 [ Gold Layer ] ──► [ Streamlit Cloud Dashboard ]
