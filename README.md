@@ -5,7 +5,7 @@ A production-grade, end-to-end Big Data pipeline implementing the **Medallion Ar
 ---
 
 ## 🌐 Live Demo
-👉 **[Click Here to View the Live Streamlit Cloud Application](https://fpq9fozykr3m6bkpvq8fhz.streamlit.app/)**
+👉 **[Click Here to View the Live Streamlit Cloud Application](https://big-data-spark-pipeline-fpq9fozykr3m6bkpvq8fhz.streamlit.app)**
 
 ---
 
