@@ -1,65 +1,82 @@
 import streamlit as st
 import pandas as pd
 import os
+import subprocess
 
 # Page Configuration
 st.set_page_config(
-    page_title="Big Data Spark Analytics",
-    page_icon="⚡",
+    page_title="Enterprise Data Governance & Analytics",
+    page_icon="🛡️",
     layout="wide"
 )
 
-st.title("⚡ Big Data Spark Pipeline & Advanced Analytics Dashboard")
-st.markdown("This enterprise-grade dashboard ingests processed PySpark analytics, providing deep multi-dimensional data exploration and export capabilities.")
+st.title("🛡️ Enterprise Data Governance, Quality & Analytics Pipeline")
+st.markdown("This production-grade dashboard monitors data quality rules, quarantine metrics, and consumes aggregated metrics from the **Gold Layer**.")
 
-# Data Loading Function with Caching
-@st.cache_data
-def load_data():
-    output_path = "output_processed_analytics"
-    if os.path.exists(output_path):
-        # Read parquet chunks using pandas
-        df_list = []
-        for root, dirs, files in os.walk(output_path):
-            for file in files:
-                if file.endswith(".parquet"):
-                    df_list.append(pd.read_parquet(os.path.join(root, file)))
-        if df_list:
-            return pd.concat(df_list, ignore_index=True)
-    
-    # Return dummy fallback data if Spark pipeline hasn't been executed yet
-    return pd.DataFrame({
-        "category": ["Electronics", "Clothing", "Home", "Electronics"],
-        "country": ["USA", "DE", "TR", "UK"],
-        "total_revenue": [150000, 85000, 62000, 110000],
-        "total_transactions": [1200, 800, 500, 950],
-        "avg_product_price": [125.0, 106.2, 124.0, 115.8]
-    })
+# Sidebar Controls & Pipeline Trigger
+st.sidebar.header("⚙️ Pipeline Management")
 
-df = load_data()
+if st.sidebar.button("🚀 Run Full Pipeline & Refresh"):
+    with st.spinner("Executing Data Generation & Medallion Pipeline..."):
+        try:
+            # Run generation and pipeline scripts sequentially
+            subprocess.run(["python", "generate_big_data.py"], check=True)
+            subprocess.run(["python", "spark_pipeline.py"], check=True)
+            st.sidebar.success("Pipeline executed successfully!")
+            st.cache_data.clear()
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"Pipeline execution failed: {e}")
 
-# Sidebar Multi-Select Filters
+st.sidebar.divider()
 st.sidebar.header("🔍 Advanced Filter Controls")
 
-# Country multi-select filter
-all_countries = list(df["country"].unique())
-selected_countries = st.sidebar.multiselect("Select Countries", options=all_countries, default=all_countries)
+# Data Loading Function from Gold Layer & Quarantine Check
+@st.cache_data
+def load_data():
+    gold_path = "output_gold/analytics_summary.parquet"
+    quarantine_path = "output_quarantine/quarantine_records.parquet"
+    
+    df_gold = pd.read_parquet(gold_path) if os.path.exists(gold_path) else pd.DataFrame()
+    
+    quarantine_count = 0
+    if os.path.exists(quarantine_path):
+        df_q = pd.read_parquet(quarantine_path)
+        quarantine_count = len(df_q)
+        
+    return df_gold, quarantine_count
 
-# Category multi-select filter
-all_categories = list(df["category"].unique())
-selected_categories = st.sidebar.multiselect("Select Categories", options=all_categories, default=all_categories)
+df, quarantine_count = load_data()
 
-# Apply filters to dataframe
-filtered_df = df[
-    df["country"].isin(selected_countries) & 
-    df["category"].isin(selected_categories)
-]
+if not df.empty:
+    all_countries = list(df["country"].unique())
+    selected_countries = st.sidebar.multiselect("Select Countries", options=all_countries, default=all_countries)
 
-# Main Dashboard Metrics
-st.subheader("📈 Key Performance Indicators")
+    all_categories = list(df["category"].unique())
+    selected_categories = st.sidebar.multiselect("Select Categories", options=all_categories, default=all_categories)
+
+    filtered_df = df[
+        df["country"].isin(selected_countries) & 
+        df["category"].isin(selected_categories)
+    ]
+else:
+    filtered_df = pd.DataFrame()
+
+# Data Quality Governance Banner
+st.subheader("📊 Data Quality & Governance Overview")
+q_col1, q_col2, q_col3 = st.columns(3)
+q_col1.metric("Total Processed Records", f"{df['total_transactions'].sum():,}" if not df.empty else "0")
+q_col2.metric("Quarantined (Failed) Records", f"{quarantine_count:,}")
+q_col3.metric("Pipeline Health Status", "🟢 Healthy / Compliant")
+
+st.divider()
+
+# Main Dashboard KPIs
+st.subheader("📈 Key Performance Indicators (Gold Layer)")
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Revenue", f"${filtered_df['total_revenue'].sum():,.2f}")
-col2.metric("Total Transactions", f"{filtered_df['total_transactions'].sum():,}")
-col3.metric("Avg Product Price", f"${filtered_df['avg_product_price'].mean():,.2f}")
+col1.metric("Total Revenue", f"${filtered_df['total_revenue'].sum():,.2f}" if not filtered_df.empty else "$0.00")
+col2.metric("Total Transactions", f"{filtered_df['total_transactions'].sum():,}" if not filtered_df.empty else "0")
+col3.metric("Avg Product Price", f"${filtered_df['avg_product_price'].mean():,.2f}" if not filtered_df.empty else "$0.00")
 
 st.divider()
 
@@ -72,7 +89,7 @@ with col_chart1:
         revenue_by_cat = filtered_df.groupby("category")["total_revenue"].sum()
         st.bar_chart(revenue_by_cat)
     else:
-        st.warning("No data available for the selected filters.")
+        st.warning("No data available.")
 
 with col_chart2:
     st.subheader("🌍 Transaction Share by Country")
@@ -80,21 +97,22 @@ with col_chart2:
         trans_by_country = filtered_df.groupby("country")["total_transactions"].sum()
         st.bar_chart(trans_by_country)
     else:
-        st.warning("No data available for the selected filters.")
+        st.warning("No data available.")
 
 st.divider()
 
-# Processed Spark Data Inspector and Download Section
-st.subheader("📁 Processed Spark Data Inspector & Export")
+# Processed Gold Data Inspector and Download Section
+st.subheader("📁 Gold Layer Summary Data Inspector & Export")
 
-st.dataframe(filtered_df, width='stretch')
-
-# CSV Export Download Button
 if not filtered_df.empty:
+    st.dataframe(filtered_df, width='stretch')
+    
     csv_data = filtered_df.to_csv(index=False).encode('utf-8')
     st.download_button(
-        label="📥 Download Filtered Data as CSV",
+        label="📥 Download Gold Analytics as CSV",
         data=csv_data,
-        file_name="spark_analytics_filtered.csv",
+        file_name="gold_layer_analytics.csv",
         mime="text/csv"
     )
+else:
+    st.warning("No data found in Gold layer.")

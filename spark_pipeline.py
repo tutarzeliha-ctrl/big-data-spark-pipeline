@@ -1,72 +1,75 @@
 import os
-import sys
-import subprocess
+import pandas as pd
 
-# Automatically detect Java path on Windows to avoid 'path not found' errors
-if "JAVA_HOME" not in os.environ:
-    try:
-        java_path = subprocess.check_output(
-            ["powershell", "-Command", "[System.Environment]::GetEnvironmentVariable('JAVA_HOME', 'Machine')"],
-            text=True
-        ).strip()
-        if java_path:
-            os.environ['JAVA_HOME'] = java_path
-    except Exception:
-        pass
+BRONZE_PATH = "output_bronze"
+SILVER_PATH = "output_silver"
+GOLD_PATH = "output_gold"
+QUARANTINE_PATH = "output_quarantine"
 
-if "JAVA_HOME" not in os.environ or not os.path.exists(os.environ['JAVA_HOME']):
-    for p in [r"C:\Program Files\Java\jdk-17", r"C:\Program Files\Java\jdk-11", r"C:\Program Files\Eclipse Adoptium\jdk-17.0.10.7-hotspot"]:
-        if os.path.exists(p):
-            os.environ['JAVA_HOME'] = p
-            break
+# Create output directories for layers
+os.makedirs(SILVER_PATH, exist_ok=True)
+os.makedirs(GOLD_PATH, exist_ok=True)
+os.makedirs(QUARANTINE_PATH, exist_ok=True)
 
-os.environ['HADOOP_HOME'] = os.environ.get('JAVA_HOME', "")
+print("🚀 Starting Enterprise Medallion Pipeline with Data Quality & Governance...")
 
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, sum as _sum, avg, count
+# ---------------------------------------------------------
+# 1. BRONZE TO SILVER (Data Quality Validation & Quarantine)
+# ---------------------------------------------------------
+print("🔄 Processing Bronze -> Silver layer with Data Quality Rules...")
 
-def run_large_scale_pipeline():
-    print("🚀 Initializing Large-Scale Spark Session...")
-    
-    # Create an optimized Spark session for large datasets
-    spark = SparkSession.builder \
-        .appName("Big Data E-Commerce Scale Pipeline") \
-        .config("spark.driver.memory", "4g") \
-        .config("spark.sql.shuffle.partitions", "200") \
-        .getOrCreate()
-    
-    spark.sparkContext.setLogLevel("ERROR")
-    
-    input_path = "./data/raw_large/*.parquet"
-    print(f"📦 Reading large dataset from path: {input_path}")
-    
-    # Read parquet chunks in a distributed architecture
-    df = spark.read.parquet(input_path)
-    
-    total_rows = df.count()
-    print(f"✨ Total records loaded successfully: {total_rows:,}")
-    
-    print("\n--- Data Schema Overview ---")
-    df.printSchema()
-    
-    # Perform large-scale grouping and aggregations by category and country
-    print("\n📊 Running Distributed Calculations and Analytics...")
-    analytics_summary = df.groupBy("category", "country").agg(
-        _sum(col("price") * col("quantity")).alias("total_revenue"),
-        count("user_id").alias("total_transactions"),
-        avg("price").alias("avg_product_price")
-    ).orderBy(col("total_revenue").desc())
-    
-    print("\nTop 10 Categories and Countries by Revenue Performance:")
-    analytics_summary.show(10, truncate=False)
-    
-    # Save processed analytics data partitioned by category in Parquet format
-    output_path = "./output_processed_analytics"
-    print(f"\n💾 Saving partitioned analytics data to: {output_path}...")
-    analytics_summary.write.mode("overwrite").partitionBy("category").parquet(output_path)
-    
-    print("\n🎉 Big Data Pipeline completed successfully from end to end!")
-    spark.stop()
+bronze_files = [os.path.join(BRONZE_PATH, f) for f in os.listdir(BRONZE_PATH) if f.endswith(".parquet")]
+if not bronze_files:
+    raise FileNotFoundError("No Bronze data found! Please run generate_big_data.py first.")
 
-if __name__ == "__main__":
-    run_large_scale_pipeline()
+df_bronze_list = [pd.read_parquet(f) for f in bronze_files]
+df_bronze = pd.concat(df_bronze_list, ignore_index=True)
+
+total_records = len(df_bronze)
+
+# Define Data Quality Rules
+# Rule 1: No nulls in critical columns
+# Rule 2: product_price > 0 and quantity > 0
+is_valid_nulls = df_bronze["transaction_id"].notnull() & \
+                 df_bronze["category"].notnull() & \
+                 df_bronze["product_price"].notnull() & \
+                 df_bronze["quantity"].notnull()
+
+is_valid_values = (df_bronze["product_price"] > 0) & (df_bronze["quantity"] > 0)
+
+# Separate valid data (Silver) and invalid data (Quarantine)
+valid_mask = is_valid_nulls & is_valid_values
+
+df_silver = df_bronze[valid_mask].copy()
+df_quarantine = df_bronze[~valid_mask].copy()
+
+# Save Silver layer
+silver_file_path = os.path.join(SILVER_PATH, "cleaned_transactions.parquet")
+df_silver.to_parquet(silver_file_path, index=False)
+
+# Save Quarantine layer for governance/auditing
+quarantine_file_path = os.path.join(QUARANTINE_PATH, "quarantine_records.parquet")
+df_quarantine.to_parquet(quarantine_file_path, index=False)
+
+print(f"📊 Data Quality Report:")
+print(f"   - Total Input Records: {total_records}")
+print(f"   - Passed to Silver Layer: {len(df_silver)} ({len(df_silver)/total_records*100:.2f}%)")
+print(f"   - Quarantined (Failed Rules): {len(df_quarantine)} ({len(df_quarantine)/total_records*100:.2f}%)")
+print(f"✅ Silver layer successfully written to: {silver_file_path}")
+
+# ---------------------------------------------------------
+# 2. SILVER TO GOLD (Business Aggregations Layer)
+# ---------------------------------------------------------
+print("🔄 Processing Silver -> Gold layer (Business Aggregations)...")
+
+df_gold = df_silver.groupby(["category", "country"]).agg(
+    total_revenue=("total_amount", lambda x: round(x.sum(), 2)),
+    total_transactions=("transaction_id", "count"),
+    avg_product_price=("product_price", lambda x: round(x.mean(), 2))
+).reset_index()
+
+gold_file_path = os.path.join(GOLD_PATH, "analytics_summary.parquet")
+df_gold.to_parquet(gold_file_path, index=False)
+print(f"✅ Gold layer successfully written to: {gold_file_path}")
+
+print("🎉 Enterprise Medallion Pipeline with Governance completed successfully!")
