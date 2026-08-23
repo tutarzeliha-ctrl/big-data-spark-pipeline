@@ -13,7 +13,9 @@ st.set_page_config(
 gold_path = "output_gold/analytics_summary.parquet"
 if not os.path.exists(gold_path):
     import generate_big_data
+    generate_big_data
     import spark_pipeline
+    spark_pipeline
 
 st.title("🛡️ Enterprise Data Governance, Quality & Analytics Pipeline")
 st.markdown("This production-grade dashboard monitors data quality rules, quarantine metrics, and consumes aggregated metrics from the **Gold Layer**.")
