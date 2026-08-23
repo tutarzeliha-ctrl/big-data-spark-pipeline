@@ -70,3 +70,6 @@ Bash
 streamlit run app.py
 🌐 Live Demo
 You can access the live production-grade application deployed on Streamlit Cloud via the repository link.
+
+---
+### 🚀 [Access Live Streamlit Cloud Application](https://big-data-spark-pipeline-fpq9fozykr3m6bkpvq8fhz.streamlit.app/)
