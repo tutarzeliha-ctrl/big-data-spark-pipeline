@@ -1,59 +1,72 @@
 import os
-os.environ['JAVA_HOME'] = r"C:\Users\ZELİHA TUTAR\AppData\Local\Programs\Eclipse Adoptium\jdk-11.0.32.9-hotspot"
-os.environ['PATH'] = os.path.join(os.environ['JAVA_HOME'], 'bin') + ";" + os.environ.get('PATH', '')
+import sys
+import subprocess
 
-import findspark
-findspark.init()
+# Automatically detect Java path on Windows to avoid 'path not found' errors
+if "JAVA_HOME" not in os.environ:
+    try:
+        java_path = subprocess.check_output(
+            ["powershell", "-Command", "[System.Environment]::GetEnvironmentVariable('JAVA_HOME', 'Machine')"],
+            text=True
+        ).strip()
+        if java_path:
+            os.environ['JAVA_HOME'] = java_path
+    except Exception:
+        pass
+
+if "JAVA_HOME" not in os.environ or not os.path.exists(os.environ['JAVA_HOME']):
+    for p in [r"C:\Program Files\Java\jdk-17", r"C:\Program Files\Java\jdk-11", r"C:\Program Files\Eclipse Adoptium\jdk-17.0.10.7-hotspot"]:
+        if os.path.exists(p):
+            os.environ['JAVA_HOME'] = p
+            break
+
+os.environ['HADOOP_HOME'] = os.environ.get('JAVA_HOME', "")
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, sum as _sum, avg, count
 
-def run_spark_pipeline():
-    print("🚀 Initializing Spark Session...")
+def run_large_scale_pipeline():
+    print("🚀 Initializing Large-Scale Spark Session...")
     
-    # Initialize Spark Session
+    # Create an optimized Spark session for large datasets
     spark = SparkSession.builder \
-        .appName("E-Commerce Retention & Big Data Pipeline") \
-        .config("spark.driver.memory", "2g") \
+        .appName("Big Data E-Commerce Scale Pipeline") \
+        .config("spark.driver.memory", "4g") \
+        .config("spark.sql.shuffle.partitions", "200") \
         .getOrCreate()
     
     spark.sparkContext.setLogLevel("ERROR")
     
-    print("📦 Loading and processing data...")
+    input_path = "./data/raw_large/*.parquet"
+    print(f"📦 Reading large dataset from path: {input_path}")
     
-    # Create sample e-commerce dataset for testing
-    data = [
-        ("101", "Electronics", 1200.0, 1),
-        ("102", "Clothing", 150.0, 2),
-        ("103", "Electronics", 800.0, 1),
-        ("104", "Home", 300.0, 3),
-        ("105", "Clothing", 250.0, 1),
-        ("106", "Home", 450.0, 2)
-    ]
+    # Read parquet chunks in a distributed architecture
+    df = spark.read.parquet(input_path)
     
-    columns = ["order_id", "category", "amount", "customer_id"]
-    df = spark.createDataFrame(data, columns)
+    total_rows = df.count()
+    print(f"✨ Total records loaded successfully: {total_rows:,}")
     
-    print("\n--- Raw Data Preview ---")
-    df.show()
+    print("\n--- Data Schema Overview ---")
+    df.printSchema()
     
-    # Perform category-based aggregations
-    print("\n📊 Running Category Analytics...")
-    category_summary = df.groupBy("category").agg(
-        _sum("amount").alias("total_revenue"),
-        count("order_id").alias("order_count"),
-        avg("amount").alias("avg_order_value")
-    )
+    # Perform large-scale grouping and aggregations by category and country
+    print("\n📊 Running Distributed Calculations and Analytics...")
+    analytics_summary = df.groupBy("category", "country").agg(
+        _sum(col("price") * col("quantity")).alias("total_revenue"),
+        count("user_id").alias("total_transactions"),
+        avg("price").alias("avg_product_price")
+    ).orderBy(col("total_revenue").desc())
     
-    category_summary.show()
+    print("\nTop 10 Categories and Countries by Revenue Performance:")
+    analytics_summary.show(10, truncate=False)
     
-    # Save data partitioned by category in Parquet format
-    output_path = "./output_partitioned_data"
-    print(f"\n💾 Saving partitioned data to {output_path}...")
-    df.write.mode("overwrite").partitionBy("category").parquet(output_path)
+    # Save processed analytics data partitioned by category in Parquet format
+    output_path = "./output_processed_analytics"
+    print(f"\n💾 Saving partitioned analytics data to: {output_path}...")
+    analytics_summary.write.mode("overwrite").partitionBy("category").parquet(output_path)
     
-    print("\n✨ Spark Pipeline executed successfully!")
+    print("\n🎉 Big Data Pipeline completed successfully from end to end!")
     spark.stop()
 
 if __name__ == "__main__":
-    run_spark_pipeline()
+    run_large_scale_pipeline()
