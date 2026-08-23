@@ -1,4 +1,7 @@
+Markdown
 # ⚡ Enterprise Medallion Architecture: Big Data Spark & Analytics Pipeline
+
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://big-data-spark-pipeline-fpq9fozykr3m6bkpvq8fhz.streamlit.app)
 
 An enterprise-grade, end-to-end Big Data Engineering and Analytics project built with **Python**, **Pandas/PySpark**, **Parquet**, and **Streamlit**. This pipeline implements the modern **Medallion Architecture (Bronze -> Silver -> Gold)** for large-scale e-commerce transactional data processing, cleaning, aggregations, and an interactive web analytics dashboard.
 
@@ -19,3 +22,19 @@ An enterprise-grade, end-to-end Big Data Engineering and Analytics project built
    ```bash
    git clone [https://github.com/tutarzeliha-ctrl/big-data-spark-pipeline.git](https://github.com/tutarzeliha-ctrl/big-data-spark-pipeline.git)
    cd big-data-spark-pipeline
+Install dependencies:
+
+Bash
+pip install -r requirements.txt
+Step 1: Generate Raw Data (Bronze Layer):
+
+Bash
+python generate_big_data.py
+Step 2: Run Medallion Pipeline (Bronze -> Silver -> Gold):
+
+Bash
+python spark_pipeline.py
+Step 3: Launch the Streamlit Analytics Dashboard:
+
+Bash
+streamlit run app.py
