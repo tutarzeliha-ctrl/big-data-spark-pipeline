@@ -9,12 +9,18 @@ st.set_page_config(
     layout="wide"
 )
 
+# Auto-generate data & run pipeline on cloud if Gold layer is missing
+gold_path = "output_gold/analytics_summary.parquet"
+if not os.path.exists(gold_path):
+    import generate_big_data
+    import spark_pipeline
+
 st.title("🛡️ Enterprise Data Governance, Quality & Analytics Pipeline")
 st.markdown("This production-grade dashboard monitors data quality rules, quarantine metrics, and consumes aggregated metrics from the **Gold Layer**.")
 
 # Sidebar Controls & Information
 st.sidebar.header("⚙️ Pipeline Management")
-st.sidebar.info("💡 Pipeline data is pre-compiled and governed through the Medallion Architecture (Bronze -> Silver -> Gold).")
+st.sidebar.info("💡 Pipeline automatically compiles and governs data through the Medallion Architecture (Bronze -> Silver -> Gold).")
 
 st.sidebar.divider()
 st.sidebar.header("🔍 Advanced Filter Controls")
