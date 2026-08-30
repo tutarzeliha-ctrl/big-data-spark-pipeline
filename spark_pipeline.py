@@ -28,8 +28,6 @@ df_bronze = pd.concat(df_bronze_list, ignore_index=True)
 total_records = len(df_bronze)
 
 # Define Data Quality Rules
-# Rule 1: No nulls in critical columns
-# Rule 2: product_price > 0 and quantity > 0
 is_valid_nulls = df_bronze["transaction_id"].notnull() & \
                  df_bronze["category"].notnull() & \
                  df_bronze["product_price"].notnull() & \
@@ -43,9 +41,9 @@ valid_mask = is_valid_nulls & is_valid_values
 df_silver = df_bronze[valid_mask].copy()
 df_quarantine = df_bronze[~valid_mask].copy()
 
-# Save Silver layer
-silver_file_path = os.path.join(SILVER_PATH, "cleaned_transactions.parquet")
-df_silver.to_parquet(silver_file_path, index=False)
+# Save Silver layer with partitionBy optimization (partitioning by 'category' for high-performance querying)
+silver_file_path = SILVER_PATH  # Pandas to_parquet partition_cols expects directory path
+df_silver.to_parquet(silver_file_path, index=False, partition_cols=["category"])
 
 # Save Quarantine layer for governance/auditing
 quarantine_file_path = os.path.join(QUARANTINE_PATH, "quarantine_records.parquet")
@@ -55,7 +53,7 @@ print(f"📊 Data Quality Report:")
 print(f"   - Total Input Records: {total_records}")
 print(f"   - Passed to Silver Layer: {len(df_silver)} ({len(df_silver)/total_records*100:.2f}%)")
 print(f"   - Quarantined (Failed Rules): {len(df_quarantine)} ({len(df_quarantine)/total_records*100:.2f}%)")
-print(f"✅ Silver layer successfully written to: {silver_file_path}")
+print(f"✅ Silver layer successfully written with partitioning to: {silver_file_path}")
 
 # ---------------------------------------------------------
 # 2. SILVER TO GOLD (Business Aggregations Layer)
